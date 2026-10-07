@@ -4,10 +4,12 @@
 |---|---|
 | **Status** | Draft — In Review |
 | **Author** | Nikko Pisciotti |
-| **Reviewers** | Backend Lead, Frontend Lead, DBA, Customer Support Ops |
+| **Reviewers** | Engineering Manager, Staff Engineer + QA team |
 | **Last updated** | _[Date]_ |
 
-> _Sample document. All table names, procedures, endpoints and business rules are fictional and simplified for illustration._
+> _Sample document! All of these are highly contrived examples meant to show how I would document a proposed code change._
+
+
 
 ---
 
@@ -25,10 +27,6 @@ Because the 1-order-to-1-token assumption is baked into several stored procedure
 - Support both models side by side, driven by `membership_model_type`
 - Partial refunds when one of two tokens has already been used
 - No behavior change for existing single-token members
-
-### Non-goals
-- Migrating existing single-token members to the split model (members are grandfathered)
-- Replacing the ColdFusion payment layer (see §6, Future Concerns)
 
 ---
 
@@ -71,8 +69,6 @@ erDiagram
 **Schema changes**
 - `membership.membership_model_type` — `VARCHAR(10) NOT NULL DEFAULT 'SINGLE'`
 - `membership_tokens.token_sequence` — position of the token within its order
-- `membership_tokens.value_cents` — each token's own value, so refunds never re-derive it from the order total
-- New token status `PENDING_REFUND` to lock tokens while a gateway refund is in flight
 
 **Rounding rule:** odd-cent orders split with the remainder on token 1 (e.g. `4999` → `2500` + `2499`). Token values must always sum to the order amount.
 
@@ -123,43 +119,8 @@ sequenceDiagram
 
 > **Why lock first?** Locking tokens in SQL *before* calling the gateway prevents a member from redeeming a token while its refund is mid-flight, and prevents double refunds from a double-click.
 
-### 3.1 SQL — lock refundable tokens
 
-**Before** (`usp_Order_Refund`)
-```sql
--- Assumes exactly one token per order
-UPDATE membership_tokens
-SET    status = 'REFUNDED'
-WHERE  order_id = @OrderId;
-
-UPDATE orders SET status = 'REFUNDED' WHERE order_id = @OrderId;
-```
-
-**After** (`usp_Order_LockTokensForRefund`)
-```sql
--- @TokenIds is a table-valued parameter (dbo.IntList)
-BEGIN TRAN;
-
-UPDATE t
-SET    t.status = 'PENDING_REFUND'
-OUTPUT inserted.token_id, inserted.value_cents INTO @Locked
-FROM   membership_tokens t WITH (UPDLOCK, ROWLOCK)
-JOIN   @TokenIds ids ON ids.id = t.token_id
-WHERE  t.order_id = @OrderId
-  AND  t.status   = 'AVAILABLE';          -- used tokens are never refundable
-
-IF (SELECT COUNT(*) FROM @Locked) <> (SELECT COUNT(*) FROM @TokenIds)
-BEGIN
-    ROLLBACK;
-    THROW 50010, 'One or more tokens are not refundable.', 1;
-END
-
-COMMIT;
-
-SELECT SUM(value_cents) AS refund_cents FROM @Locked;
-```
-
-### 3.2 Node API — refund handler
+### 3.1 Node API — refund handler
 
 **Before**
 ```js
@@ -203,7 +164,7 @@ async function refundOrder(req, res) {
 }
 ```
 
-### 3.3 ColdFusion — accept a partial amount
+### 3.2 ColdFusion — accept a partial amount
 
 **Before** (`RefundService.cfc`)
 ```cfml
@@ -451,4 +412,4 @@ The API does basic validation only; the **sproc is the source of truth** for per
 
 - Should CS be able to override the comp limit with manager approval?
 - Do partially refunded orders need a distinct `orders.status` (e.g. `PARTIALLY_REFUNDED`)?
-- How long should `/v1` billing history remain supported?
+- Should we plan on future brands migrating to a multi-token model?
