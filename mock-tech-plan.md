@@ -7,7 +7,7 @@
 | **Reviewers** | Engineering Manager, Staff Engineer + QA team |
 | **Last updated** | _10/06/2026_ |
 
-> _Sample document! All of these are highly contrived examples meant to show how I would document a proposed code change._
+> _Sample document! All of these are highly contrived examples. Meant to highlight a real experience as a mock._
 
 
 
