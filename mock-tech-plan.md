@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Draft — In Review |
-| **Author** | _[Your Name]_ |
+| **Author** | Nikko Pisciotti |
 | **Reviewers** | Backend Lead, Frontend Lead, DBA, Customer Support Ops |
 | **Last updated** | _[Date]_ |
 
